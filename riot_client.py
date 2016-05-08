@@ -1,25 +1,20 @@
 __author__ = 'Patrick O\'Brien'
-''' COPYRIGHT 2015
+''' COPYRIGHT 2016
     This file is part of lolPy.
-
     lolPy is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-
     lolPy is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
     You should have received a copy of the GNU General Public License
     along with lolPy.  If not, see <http://www.gnu.org/licenses/>.
 '''
-
 from typing import Any, List
 import requests
 import time
-
 
 URLS = dict(
     summoner_by_name='v1.4/summoner/by-name/{summonerName}',
@@ -34,7 +29,6 @@ URLS = dict(
 
 # default number of seconds to wait when given a RateLimitExceeded exception
 RATE_LIMIT_EXCEEDED_SLEEP_DURATION = 10
-
 
 class Client:
 
@@ -163,6 +157,7 @@ class Client:
         self,
         summoner_id: int,
         region: str='na',
+        rankedQueues: str='',
         begin_time: int=0
     ):
 
@@ -170,14 +165,20 @@ class Client:
             'summoner_id is not an int: %r' % str(summoner_id)
         assert type(region) is str, \
             'region is not a string: %r' % str(region)
+        assert type(rankedQueues) is str, \
+            'rankedQueues is not a string: %r' % str(rankedQueues)
 
         url = (self.base + URLS['match_list']).format(
             region=region,
-            summonerId=summoner_id
+            summonerId=summoner_id,
+            rankedQueues=rankedQueues
         )
         payload = {'api_key': self._api_key}
         if begin_time and begin_time > 0:
             payload.update({'beginTime': begin_time})
+
+        if rankedQueues and len(rankedQueues) > 0:
+            payload.update({'rankedQueues': rankedQueues})
 
         r = requests.get(url, params=payload)
         if not self._handle_status(r):
@@ -304,10 +305,30 @@ class Client:
                       for summoner_id in summoner_ids]
                      ), region)
 
-
 if __name__ == '__main__':
-    c = Client()
-    me = c.get_summoner_by_name('drunk7irishman')
-    test = c.get_ranked_stats(me['drunk7irishman']["id"])
-    test2 = c.get_league_data(me['drunk7irishman']["id"])
-    print(test)
+    summonerId = 1682612
+    apikey = "INSERT YOUR API HERE"
+
+    c = Client(apikey)
+    
+    randomPlayer = c.get_summoner_by_id(summoner_id=summonerId, region='br')
+    print ("this players name is", randomPlayer[str(summonerId)]["name"])
+
+    #Now we know it works, so lets get some real information
+    #Here we will see in wich lane this player prefer to play on ranked games
+    test = c.get_match_list(summoner_id=summonerId, region='br', rankedQueues='RANKED_SOLO_5x5,RANKED_TEAM_5x5')
+
+    lane = { "TOP" : 0, "MID": 0, "BOTTOM": 0, "TOTAL":0 }
+    for match in test['matches']:
+        if match["lane"] == "BOTTOM":
+            lane["BOTTOM"] += 1
+        elif match["lane"] == "MID":
+            lane["MID"] += 1
+        elif match["lane"] == "TOP":
+            lane["TOP"] += 1
+    
+    lane["TOTAL"] = test["totalGames"]
+
+    print("This player usually plays {0:.1f} of his games in the TOP lane.".format((lane["TOP"]/lane["TOTAL"])*100))
+    print("This player usually plays {0:.1f} of his games in the MID lane.".format((lane["MID"]/lane["TOTAL"])*100))
+    print("This player usually plays {0:.1f} of his games in the BOT lane.".format((lane["BOTTOM"]/lane["TOTAL"])*100))
